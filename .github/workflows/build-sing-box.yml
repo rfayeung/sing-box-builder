@@ -110,9 +110,9 @@ jobs:
           # 打包 data.tar.gz
           tar czf $PKG_DIR/data.tar.gz -C $PKG_DIR data/
 
-          # 用系统 ar 命令打包 IPK
+          # 用系统 ar 命令打包 IPK（成员名必须不含目录前缀）
           sudo apt-get install -y -qq binutils >/dev/null 2>&1
-          ar rc $PKG_FILE $PKG_DIR/debian-binary $PKG_DIR/control.tar.gz $PKG_DIR/data.tar.gz
+          (cd $PKG_DIR && ar rc ../$PKG_FILE debian-binary control.tar.gz data.tar.gz)
 
           echo "pkg_file=$PKG_FILE" >> $GITHUB_OUTPUT
           ls -lh $PKG_FILE
