@@ -141,7 +141,7 @@ jobs:
 
           # 验证 IPK 结构
           printf '%s\n' \
-            'import struct' \
+            'import os, struct' \
             'pkg_file = os.environ["PKG_FILE"]' \
             'with open(pkg_file, "rb") as f:' \
             '    m = f.read(8)' \
