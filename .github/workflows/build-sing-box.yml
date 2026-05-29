@@ -102,6 +102,7 @@ jobs:
             > $PKG_DIR/control/control
 
           # 写 Python 打包脚本到临时文件并执行
+          export PKG_FILE PKG_DIR
           printf '%s\n' \
             'import os, tarfile, io, struct, time' \
             'pkg_dir = os.environ["PKG_DIR"]' \
