@@ -80,6 +80,7 @@ jobs:
           # 准备文件
           PKG_DIR=ipk-build
           rm -rf $PKG_DIR
+          mkdir -p $PKG_DIR/control
           mkdir -p $PKG_DIR/data/usr/bin
           mkdir -p $PKG_DIR/data/etc/sing-box
           mkdir -p $PKG_DIR/data/etc/config
