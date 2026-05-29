@@ -76,16 +76,13 @@ jobs:
           PKG_ARCH=aarch64_cortex-a53
           PKG_FILE=${PKG_NAME}_${VERSION}_${PKG_ARCH}.ipk
 
-          # 清理并创建目录
+          # 准备文件
           PKG_DIR=ipk-build
           rm -rf $PKG_DIR
           mkdir -p $PKG_DIR/data/usr/bin
           mkdir -p $PKG_DIR/data/etc/sing-box
           mkdir -p $PKG_DIR/data/etc/config
           mkdir -p $PKG_DIR/data/etc/init.d
-          mkdir -p $PKG_DIR/control
-
-          # 复制文件到 data 目录
           cp build/sing-box $PKG_DIR/data/usr/bin/
           cp /tmp/sing-box-files/config.json $PKG_DIR/data/etc/sing-box/
           cp /tmp/sing-box-files/sing-box.conf $PKG_DIR/data/etc/config/
@@ -102,18 +99,40 @@ jobs:
             "Description: The universal proxy platform" \
             > $PKG_DIR/control/control
 
-          # 创建 ipk (ar archive)
-          mkdir -p $PKG_DIR/pkg
-          (cd $PKG_DIR/data && tar czf ../pkg/data.tar.gz .)
-          (cd $PKG_DIR/control && tar czf ../pkg/control.tar.gz .)
-          echo "2.0" > $PKG_DIR/pkg/debian-binary
-          cd $PKG_DIR/pkg
-          ar rc $GITHUB_WORKSPACE/$PKG_FILE debian-binary control.tar.gz data.tar.gz
-          cd $GITHUB_WORKSPACE
+          # 用 Python 打包 IPK（兼容 POSIX ar 格式）
+          export PKG_FILE PKG_DIR
+          python3 -c 'import os, tarfile, io, struct, time
+          pkg_dir = os.environ["PKG_DIR"]
+          pkg_file = os.environ["PKG_FILE"]
+          data_buf = io.BytesIO()
+          with tarfile.open(fileobj=data_buf, mode="w:gz") as tar:
+              root = os.path.join(pkg_dir, "data")
+              for dirpath, dirnames, filenames in os.walk(root):
+                  for fn in filenames:
+                      full = os.path.join(dirpath, fn)
+                      arcname = os.path.relpath(full, root)
+                      tar.add(full, arcname=arcname)
+          data_tar = data_buf.getvalue()
+          ctl_buf = io.BytesIO()
+          with tarfile.open(fileobj=ctl_buf, mode="w:gz") as tar:
+              tar.add(os.path.join(pkg_dir, "control", "control"), arcname="control")
+          ctl_tar = ctl_buf.getvalue()
+          deb = b"2.0\n"
+          def ar_header(name, size):
+              return struct.pack("16s12s6s6s8s10s2s",
+                  name.encode("ascii").ljust(16)[:16],
+                  str(int(time.time())).encode().ljust(12)[:12],
+                  b"0".ljust(6), b"0".ljust(6),
+                  oct(0o100644).encode().ljust(8)[:8],
+                  str(size).encode().ljust(10)[:10], b"\x60\x0a")
+          with open(pkg_file, "wb") as f:
+              f.write(b"!<arch>\n")
+              for name, data in [("debian-binary", deb), ("control.tar.gz", ctl_tar), ("data.tar.gz", data_tar)]:
+                  f.write(ar_header(name, len(data))); f.write(data)
+                  if len(data) % 2 != 0: f.write(b"\n")
+          print(f"IPK created: {pkg_file} ({os.path.getsize(pkg_file)} bytes)")'
 
           echo "pkg_file=$PKG_FILE" >> $GITHUB_OUTPUT
-          echo "=== IPK 包内容 ==="
-          ar t $PKG_FILE
           ls -lh $PKG_FILE
 
       - name: 上传 IPK 到 Actions Artifacts
