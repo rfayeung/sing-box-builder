@@ -54,27 +54,14 @@ jobs:
       - name: 准备 OpenWrt 配置文件和默认配置
         run: |
           mkdir -p /tmp/sing-box-files
-
-          # 从 openwrt/packages 获取 OpenWrt 集成文件
           wget -q https://raw.githubusercontent.com/openwrt/packages/master/net/sing-box/files/sing-box.conf -O /tmp/sing-box-files/sing-box.conf
           wget -q https://raw.githubusercontent.com/openwrt/packages/master/net/sing-box/files/sing-box.init -O /tmp/sing-box-files/sing-box.init
           chmod +x /tmp/sing-box-files/sing-box.init
-
-          # 使用 sing-box 源码自带的默认配置文件（版本匹配）
           if [ -f release/config/config.json ]; then
             cp release/config/config.json /tmp/sing-box-files/config.json
           else
-            # 备选：生成最小配置
-            cat > /tmp/sing-box-files/config.json <<EOF
-          {
-            "log": { "level": "info" },
-            "inbounds": [],
-            "outbounds": []
-          }
-          EOF
+            printf '{\n  "log": { "level": "info" },\n  "inbounds": [],\n  "outbounds": []\n}\n' > /tmp/sing-box-files/config.json
           fi
-
-          echo "配置文件已准备"
           ls -la /tmp/sing-box-files
 
       - name: 打包为 IPK
@@ -102,15 +89,15 @@ jobs:
           cp /tmp/sing-box-files/sing-box.init $PKG_DIR/data/etc/init.d/sing-box
 
           # control 文件
-          cat > $PKG_DIR/control/control <<CTRL
-Package: $PKG_NAME
-Version: $VERSION
-Depends: ca-bundle, kmod-inet-diag, kmod-tun
-Source: https://github.com/SagerNet/sing-box/tree/$TAG
-License: GPL-3.0-or-later
-Architecture: $PKG_ARCH
-Description: The universal proxy platform
-CTRL
+          printf '%s\n' \
+            "Package: $PKG_NAME" \
+            "Version: $VERSION" \
+            "Depends: ca-bundle, kmod-inet-diag, kmod-tun" \
+            "Source: https://github.com/SagerNet/sing-box/tree/$TAG" \
+            "License: GPL-3.0-or-later" \
+            "Architecture: $PKG_ARCH" \
+            "Description: The universal proxy platform" \
+            > $PKG_DIR/control/control
 
           # 创建 ipk (ar archive)
           mkdir -p $PKG_DIR/pkg
