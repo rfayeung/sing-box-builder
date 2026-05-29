@@ -16,10 +16,10 @@ GitHub Actions 自动编译 sing-box ipk 插件，适用于 **GL.iNet AXT1800** 
 ```bash
 scp sing-box_*.ipk root@192.168.8.1:/tmp/
 ssh root@192.168.8.1
-opkg update && opkg install /tmp/sing-box_*.ipk --force-depends
+opkg update && opkg install /tmp/sing-box_*.ipk
 ```
 
-> `--force-depends` 跳过 kmod 内核版本检查（你的固件内核为 5.4.164，与主线 OpenWrt 不同）
+> 如果提示依赖错误，尝试：`opkg install /tmp/sing-box_*.ipk --force-depends`
 
 ### 方案 B：直接下载官方预编译包（最快）
 
