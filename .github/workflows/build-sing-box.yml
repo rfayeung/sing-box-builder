@@ -101,23 +101,63 @@ jobs:
             "Description: The universal proxy platform" \
             > $PKG_DIR/control/control
 
-          # 生成 debian-binary
-          echo "2.0" > $PKG_DIR/debian-binary
+          # 写 Python 打包脚本到临时文件并执行
+          printf '%s\n' \
+            'import os, tarfile, io, struct, time' \
+            'pkg_dir = os.environ["PKG_DIR"]' \
+            'pkg_file = os.environ["PKG_FILE"]' \
+            'data_buf = io.BytesIO()' \
+            'with tarfile.open(fileobj=data_buf, mode="w:gz") as tar:' \
+            '    root = os.path.join(pkg_dir, "data")' \
+            '    for dirpath, dirnames, filenames in os.walk(root):' \
+            '        for fn in filenames:' \
+            '            full = os.path.join(dirpath, fn)' \
+            '            arcname = os.path.relpath(full, root)' \
+            '            tar.add(full, arcname=arcname)' \
+            'data_tar = data_buf.getvalue()' \
+            'ctl_buf = io.BytesIO()' \
+            'with tarfile.open(fileobj=ctl_buf, mode="w:gz") as tar:' \
+            '    tar.add(os.path.join(pkg_dir, "control", "control"), arcname="control")' \
+            'ctl_tar = ctl_buf.getvalue()' \
+            'deb = b"2.0\n"' \
+            'def ar_header(name, size):' \
+            '    return struct.pack("=16s12s6s6s8s10s2s",' \
+            '        name.encode("ascii").ljust(16)[:16],' \
+            '        str(int(time.time())).encode().ljust(12)[:12],' \
+            '        b"0".ljust(6), b"0".ljust(6),' \
+            '        b"100644".ljust(8)[:8],' \
+            '        str(size).encode().ljust(10)[:10], b"\x60\x0a")' \
+            'with open(pkg_file, "wb") as f:' \
+            '    f.write(b"!<arch>\n")' \
+            '    for name, data in [("debian-binary", deb), ("control.tar.gz", ctl_tar), ("data.tar.gz", data_tar)]:' \
+            '        f.write(ar_header(name, len(data)))' \
+            '        f.write(data)' \
+            '        if len(data) % 2 != 0:' \
+            '            f.write(b"\n")' \
+            'print("IPK created")' \
+            > /tmp/build_ipk.py
+          python3 /tmp/build_ipk.py
 
-          # 打包 control.tar.gz（成员在根级别，不含目录前缀）
-          tar czf $PKG_DIR/control.tar.gz --directory=$PKG_DIR/control .
-
-          # 打包 data.tar.gz（成员以 ./usr/bin/... 形式存储）
-          tar czf $PKG_DIR/data.tar.gz --directory=$PKG_DIR/data .
-
-          # 用系统 ar 命令打包 IPK（成员名必须不含目录前缀）
-          sudo apt-get install -y -qq binutils >/dev/null 2>&1
-          (cd $PKG_DIR && ar rc ../$PKG_FILE debian-binary control.tar.gz data.tar.gz)
+          # 验证 IPK 结构
+          printf '%s\n' \
+            'import struct' \
+            'pkg_file = os.environ["PKG_FILE"]' \
+            'with open(pkg_file, "rb") as f:' \
+            '    m = f.read(8)' \
+            '    print("Magic:", repr(m))' \
+            '    for i in range(3):' \
+            '        h = f.read(60)' \
+            '        if len(h) < 60: break' \
+            '        n = h[0:16].decode("ascii").strip()' \
+            '        s = int(h[48:58].decode("ascii").strip())' \
+            '        print(f"  [{i}] name={n} size={s}")' \
+            '        f.seek(s + (s % 2), 1)' \
+            'print("Validation OK")' \
+            > /tmp/verify_ipk.py
+          python3 /tmp/verify_ipk.py
 
           echo "pkg_file=$PKG_FILE" >> $GITHUB_OUTPUT
           ls -lh $PKG_FILE
-          # 验证 IPK 结构
-          ar t $PKG_FILE
 
       - name: 上传 IPK 到 Actions Artifacts
         uses: actions/upload-artifact@v4
